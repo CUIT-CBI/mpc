@@ -27,8 +27,9 @@ func main() {
 	secret := []byte(s)
 
 	parts := SplitSecrets(secret, 10, 4)
-	fmt.Println(parts)
-
+	fmt.Println(parts[3:6])
+	recoveredSecret := CombainParts(parts[2:6], 4)
+	fmt.Println(string(recoveredSecret))
 	// rand.Seed(time.Now().UnixNano())
 	// M := uint8(rand.Intn(255))
 	// n := uint8(10)
@@ -70,7 +71,12 @@ func SplitSecrets(secret []byte, n uint8, t uint8) []SecretUnit {
 }
 
 func CombainParts(parts []SecretUnit, t uint8) []byte {
+	secretLen := len(parts[0].data)
+	secret := make([]byte, secretLen)
+	for i := uint8(0); i < uint8(secretLen); i++ {
 
+	}
+	return secret
 }
 
 func splitByte(M uint8, n, t uint8) []uint8 {
