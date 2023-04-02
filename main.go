@@ -22,8 +22,9 @@ func main() {
 	M := uint8(rand.Intn(255))
 	n := uint8(10)
 	t := uint8(3)
+
 	coeff := makePoly(uint8(M), uint8(n), uint8(t))
-	fmt.Println(coeff)
+	fmt.Println(M)
 	shares := SplitShares(coeff, M, n)
 	fmt.Println(shares)
 
@@ -60,7 +61,7 @@ func SplitShares(coeff []uint8, s uint8, n uint8) []SecretShare {
 
 		shares[i-1] = SecretShare{
 			index: uint8(i),
-			value: uint8(tmp % 256),
+			value: uint8(tmp % 257),
 		}
 	}
 
@@ -85,7 +86,50 @@ func RecoverSecret(shares []SecretShare, t int) uint8 {
 		matrix.values[i] = int(shares[i].value)
 	}
 
-	fmt.Println(matrix.matrix)
-	fmt.Print(matrix.values)
-	return 0
+	matrix = recursion(matrix)
+
+	v := (matrix.values[0] / matrix.matrix[0][0]) % 257
+	if v < 0 {
+		v = v + 257
+	}
+
+	return uint8(v)
+}
+
+func recursion(matrix Matrix) Matrix {
+	if matrix.t == 1 {
+		return matrix
+	}
+
+	multiplication := 1
+
+	for i := 0; i < matrix.t; i++ {
+
+		multiplication *= matrix.matrix[i][matrix.t-1]
+	}
+
+	for i := 0; i < matrix.t; i++ {
+		tmp := multiplication / matrix.matrix[i][matrix.t-1]
+		for j := 0; j < matrix.t-1; j++ {
+			matrix.matrix[i][j] *= tmp
+		}
+		matrix.values[i] *= tmp
+	}
+
+	newMatrix := Matrix{
+		matrix: make([][]int, matrix.t-1),
+		values: make([]int, matrix.t-1),
+		t:      matrix.t - 1,
+	}
+
+	for i := 0; i < newMatrix.t; i++ {
+		newMatrix.values[i] = matrix.values[i+1] - matrix.values[0]
+		row := make([]int, newMatrix.t)
+		for j := 0; j < newMatrix.t; j++ {
+			row[j] = matrix.matrix[i+1][j] - matrix.matrix[0][j]
+		}
+		newMatrix.matrix[i] = row
+	}
+
+	return recursion(newMatrix)
 }
