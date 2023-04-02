@@ -3,10 +3,9 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"time"
 )
 
-type SecretShare struct {
+type SecretShareByte struct {
 	index uint8
 	value uint8
 }
@@ -17,24 +16,66 @@ type Matrix struct {
 	values []int
 }
 
+type SecretUnit struct {
+	threshold uint8
+	index     uint8
+	data      []byte
+}
+
 func main() {
-	rand.Seed(time.Now().UnixNano())
-	M := uint8(rand.Intn(255))
-	n := uint8(10)
-	t := uint8(3)
+	s := "Hello world!"
+	secret := []byte(s)
 
-	coeff := makePoly(uint8(M), uint8(n), uint8(t))
-	fmt.Println(M)
-	shares := SplitShares(coeff, M, n)
-	fmt.Println(shares)
+	parts := SplitSecrets(secret, 10, 4)
+	fmt.Println(parts)
 
-	selected := make([]SecretShare, 3)
-	selected[0] = shares[2]
-	selected[1] = shares[5]
-	selected[2] = shares[8]
+	// rand.Seed(time.Now().UnixNano())
+	// M := uint8(rand.Intn(255))
+	// n := uint8(10)
+	// t := uint8(3)
 
-	recovered := RecoverSecret(selected, int(t))
-	fmt.Printf("recovered secret: %d\n", recovered)
+	// coeff := makePoly(uint8(M), uint8(n), uint8(t))
+	// fmt.Println(M)
+	// shares := split(coeff, M, n)
+	// fmt.Println(shares)
+
+	// selected := make([]SecretShareByte, 3)
+	// selected[0] = shares[2]
+	// selected[1] = shares[5]
+	// selected[2] = shares[8]
+
+	// recovered := RecoverSecret(selected, int(t))
+	// fmt.Printf("recovered secret: %d\n", recovered)
+}
+
+func SplitSecrets(secret []byte, n uint8, t uint8) []SecretUnit {
+	result := make([]SecretUnit, n)
+	secretLen := len(secret)
+	for i := uint8(0); i < n; i++ {
+		result[i] = SecretUnit{
+			threshold: t,
+			index:     i + 1,
+			data:      make([]byte, secretLen),
+		}
+	}
+
+	for i := 0; i < secretLen; i++ {
+		parts := splitByte(secret[i], n, t)
+		for j := uint8(0); j < n; j++ {
+			result[j].data[i] = parts[j]
+		}
+	}
+
+	return result
+}
+
+func CombainParts(parts []SecretUnit, t uint8) []byte {
+
+}
+
+func splitByte(M uint8, n, t uint8) []uint8 {
+	coeffs := makePoly(M, n, t)
+	return split(coeffs, M, n)
 }
 
 func makePoly(M uint8, n uint8, t uint8) []uint8 {
@@ -47,8 +88,8 @@ func makePoly(M uint8, n uint8, t uint8) []uint8 {
 	return coeffs
 }
 
-func SplitShares(coeff []uint8, s uint8, n uint8) []SecretShare {
-	shares := make([]SecretShare, n)
+func split(coeff []uint8, M uint8, n uint8) []byte {
+	shares := make([]byte, n)
 
 	for i := 1; uint8(i) <= n; i++ {
 		tmp := int(coeff[0])
@@ -59,16 +100,13 @@ func SplitShares(coeff []uint8, s uint8, n uint8) []SecretShare {
 			multip *= i
 		}
 
-		shares[i-1] = SecretShare{
-			index: uint8(i),
-			value: uint8(tmp % 257),
-		}
+		shares[i-1] = uint8(tmp % 257)
 	}
 
 	return shares
 }
 
-func RecoverSecret(shares []SecretShare, t int) uint8 {
+func RecoverSecret(coeffs, shares []byte, t int) uint8 {
 	matrix := Matrix{
 		matrix: make([][]int, t),
 		values: make([]int, t),
@@ -77,16 +115,16 @@ func RecoverSecret(shares []SecretShare, t int) uint8 {
 	for i := 0; i < len(shares); i++ {
 		param := make([]int, t)
 		param[0] = 1
-		tmp := int(shares[i].index)
+		tmp := int(coeffs[i])
 		for j := 1; j < t; j++ {
 			param[j] = tmp
-			tmp *= int(shares[i].index)
+			tmp *= int(coeffs[i])
 		}
 		matrix.matrix[i] = param
-		matrix.values[i] = int(shares[i].value)
+		matrix.values[i] = int(shares[i])
 	}
 
-	matrix = recursion(matrix)
+	matrix = extinction(matrix)
 
 	v := (matrix.values[0] / matrix.matrix[0][0]) % 257
 	if v < 0 {
@@ -96,7 +134,7 @@ func RecoverSecret(shares []SecretShare, t int) uint8 {
 	return uint8(v)
 }
 
-func recursion(matrix Matrix) Matrix {
+func extinction(matrix Matrix) Matrix {
 	if matrix.t == 1 {
 		return matrix
 	}
@@ -131,5 +169,5 @@ func recursion(matrix Matrix) Matrix {
 		newMatrix.matrix[i] = row
 	}
 
-	return recursion(newMatrix)
+	return extinction(newMatrix)
 }
