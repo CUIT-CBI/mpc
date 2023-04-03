@@ -108,34 +108,6 @@ func split(coeff []uint8, M uint8, n uint8) []byte {
 	return shares
 }
 
-// func RecoverSecret(coeffs, shares []byte, t int) uint8 {
-// 	matrix := Matrix{
-// 		matrix: make([][]int, t),
-// 		values: make([]int, t),
-// 		t:      t,
-// 	}
-// 	for i := 0; i < len(shares); i++ {
-// 		param := make([]int, t)
-// 		param[0] = 1
-// 		tmp := int(coeffs[i])
-// 		for j := 1; j < t; j++ {
-// 			param[j] = tmp
-// 			tmp *= int(coeffs[i])
-// 		}
-// 		matrix.matrix[i] = param
-// 		matrix.values[i] = int(shares[i])
-// 	}
-
-// 	matrix = extinction(matrix)
-
-// 	v := (matrix.values[0] / matrix.matrix[0][0]) % 257
-// 	if v < 0 {
-// 		v = v + 257
-// 	}
-
-// 	return uint8(v)
-// }
-
 func makeRecoveryCoeffs(coeffs []byte) [][]int {
 	coeffLen := len(coeffs)
 	results := make([][]int, coeffLen)
@@ -170,8 +142,8 @@ func extinction(coeffs [][]int, values [][]int) ([][]int, [][]int) {
 		}
 		newCoeffs[i-1] = coeffsRow
 
-		valueRow := make([]int, valueLen-1)
-		for j := 0; j < valueLen-1; j++ {
+		valueRow := make([]int, valueLen)
+		for j := 0; j < valueLen; j++ {
 			valueRow[j] = values[i][j]*base - values[0][j]*mult
 		}
 		newValues[i-1] = valueRow
@@ -197,40 +169,3 @@ func remainder(coeffs [][]int, values [][]int) []byte {
 	}
 	return result
 }
-
-// func extinction(matrix Matrix) Matrix {
-// 	if matrix.t == 1 {
-// 		return matrix
-// 	}
-
-// 	multiplication := 1
-
-// 	for i := 0; i < matrix.t; i++ {
-// 		multiplication *= matrix.matrix[i][matrix.t-1]
-// 	}
-
-// 	for i := 0; i < matrix.t; i++ {
-// 		tmp := multiplication / matrix.matrix[i][matrix.t-1]
-// 		for j := 0; j < matrix.t-1; j++ {
-// 			matrix.matrix[i][j] *= tmp
-// 		}
-// 		matrix.values[i] *= tmp
-// 	}
-
-// 	newMatrix := Matrix{
-// 		matrix: make([][]int, matrix.t-1),
-// 		values: make([]int, matrix.t-1),
-// 		t:      matrix.t - 1,
-// 	}
-
-// 	for i := 0; i < newMatrix.t; i++ {
-// 		newMatrix.values[i] = matrix.values[i+1] - matrix.values[0]
-// 		row := make([]int, newMatrix.t)
-// 		for j := 0; j < newMatrix.t; j++ {
-// 			row[j] = matrix.matrix[i+1][j] - matrix.matrix[0][j]
-// 		}
-// 		newMatrix.matrix[i] = row
-// 	}
-
-// 	return extinction(newMatrix)
-// }
