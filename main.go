@@ -26,27 +26,11 @@ func main() {
 	s := "Hello world!"
 	secret := []byte(s)
 
+	fmt.Println(secret)
 	parts := SplitSecrets(secret, 10, 4)
-	fmt.Println(parts[3:6])
-	recoveredSecret := CombainParts(parts[2:6], 4)
-	fmt.Println(string(recoveredSecret))
-	// rand.Seed(time.Now().UnixNano())
-	// M := uint8(rand.Intn(255))
-	// n := uint8(10)
-	// t := uint8(3)
-
-	// coeff := makePoly(uint8(M), uint8(n), uint8(t))
-	// fmt.Println(M)
-	// shares := split(coeff, M, n)
-	// fmt.Println(shares)
-
-	// selected := make([]SecretShareByte, 3)
-	// selected[0] = shares[2]
-	// selected[1] = shares[5]
-	// selected[2] = shares[8]
-
-	// recovered := RecoverSecret(selected, int(t))
-	// fmt.Printf("recovered secret: %d\n", recovered)
+	recoveredSecret := CombainParts(parts[2:6])
+	fmt.Println(recoveredSecret)
+	fmt.Printf("Recovered secret: %s\n", string(recoveredSecret))
 }
 
 func SplitSecrets(secret []byte, n uint8, t uint8) []SecretUnit {
@@ -70,13 +54,25 @@ func SplitSecrets(secret []byte, n uint8, t uint8) []SecretUnit {
 	return result
 }
 
-func CombainParts(parts []SecretUnit, t uint8) []byte {
-	secretLen := len(parts[0].data)
-	secret := make([]byte, secretLen)
-	for i := uint8(0); i < uint8(secretLen); i++ {
+func CombainParts(parts []SecretUnit) []byte {
+	t := parts[0].threshold
+	indexes := make([]uint8, t)
 
+	values := make([][]int, t)
+	for i := 0; i < len(parts); i++ {
+		result := make([]int, len(parts[i].data))
+		for j := 0; j < len(parts[i].data); j++ {
+			result[j] = int(parts[i].data[j])
+		}
+		values[i] = result
+		indexes[i] = parts[i].index
 	}
-	return secret
+
+	coeffs := makeRecoveryCoeffs(indexes)
+
+	coeffs, values = extinction(coeffs, values)
+
+	return remainder(coeffs, values)
 }
 
 func splitByte(M uint8, n, t uint8) []uint8 {
@@ -112,68 +108,129 @@ func split(coeff []uint8, M uint8, n uint8) []byte {
 	return shares
 }
 
-func RecoverSecret(coeffs, shares []byte, t int) uint8 {
-	matrix := Matrix{
-		matrix: make([][]int, t),
-		values: make([]int, t),
-		t:      t,
-	}
-	for i := 0; i < len(shares); i++ {
-		param := make([]int, t)
-		param[0] = 1
+// func RecoverSecret(coeffs, shares []byte, t int) uint8 {
+// 	matrix := Matrix{
+// 		matrix: make([][]int, t),
+// 		values: make([]int, t),
+// 		t:      t,
+// 	}
+// 	for i := 0; i < len(shares); i++ {
+// 		param := make([]int, t)
+// 		param[0] = 1
+// 		tmp := int(coeffs[i])
+// 		for j := 1; j < t; j++ {
+// 			param[j] = tmp
+// 			tmp *= int(coeffs[i])
+// 		}
+// 		matrix.matrix[i] = param
+// 		matrix.values[i] = int(shares[i])
+// 	}
+
+// 	matrix = extinction(matrix)
+
+// 	v := (matrix.values[0] / matrix.matrix[0][0]) % 257
+// 	if v < 0 {
+// 		v = v + 257
+// 	}
+
+// 	return uint8(v)
+// }
+
+func makeRecoveryCoeffs(coeffs []byte) [][]int {
+	coeffLen := len(coeffs)
+	results := make([][]int, coeffLen)
+	for i := 0; i < coeffLen; i++ {
+		row := make([]int, coeffLen)
+		row[0] = 1
 		tmp := int(coeffs[i])
-		for j := 1; j < t; j++ {
-			param[j] = tmp
+		for j := 1; j < coeffLen; j++ {
+			row[j] = tmp
 			tmp *= int(coeffs[i])
 		}
-		matrix.matrix[i] = param
-		matrix.values[i] = int(shares[i])
+		results[i] = row
 	}
-
-	matrix = extinction(matrix)
-
-	v := (matrix.values[0] / matrix.matrix[0][0]) % 257
-	if v < 0 {
-		v = v + 257
-	}
-
-	return uint8(v)
+	return results
 }
 
-func extinction(matrix Matrix) Matrix {
-	if matrix.t == 1 {
-		return matrix
+func extinction(coeffs [][]int, values [][]int) ([][]int, [][]int) {
+	if len(coeffs) == 1 {
+		return coeffs, values
 	}
 
-	multiplication := 1
+	valueLen := len(values[0])
+	newCoeffs := make([][]int, len(coeffs)-1)
+	newValues := make([][]int, len(coeffs)-1)
 
-	for i := 0; i < matrix.t; i++ {
-
-		multiplication *= matrix.matrix[i][matrix.t-1]
-	}
-
-	for i := 0; i < matrix.t; i++ {
-		tmp := multiplication / matrix.matrix[i][matrix.t-1]
-		for j := 0; j < matrix.t-1; j++ {
-			matrix.matrix[i][j] *= tmp
+	for i := 1; i < len(coeffs); i++ {
+		coeffsRow := make([]int, len(coeffs)-1)
+		base := coeffs[0][len(coeffs)-1]
+		mult := coeffs[i][len(coeffs)-1]
+		for j := 0; j < len(coeffs)-1; j++ {
+			coeffsRow[j] = coeffs[i][j]*base - coeffs[0][j]*mult
 		}
-		matrix.values[i] *= tmp
-	}
+		newCoeffs[i-1] = coeffsRow
 
-	newMatrix := Matrix{
-		matrix: make([][]int, matrix.t-1),
-		values: make([]int, matrix.t-1),
-		t:      matrix.t - 1,
-	}
-
-	for i := 0; i < newMatrix.t; i++ {
-		newMatrix.values[i] = matrix.values[i+1] - matrix.values[0]
-		row := make([]int, newMatrix.t)
-		for j := 0; j < newMatrix.t; j++ {
-			row[j] = matrix.matrix[i+1][j] - matrix.matrix[0][j]
+		valueRow := make([]int, valueLen-1)
+		for j := 0; j < valueLen-1; j++ {
+			valueRow[j] = values[i][j]*base - values[0][j]*mult
 		}
-		newMatrix.matrix[i] = row
+		newValues[i-1] = valueRow
 	}
 
-	return extinction(newMatrix)
+	return extinction(newCoeffs, newValues)
 }
+
+func remainder(coeffs [][]int, values [][]int) []byte {
+	if len(coeffs) != 1 || len(values) != 1 {
+		return []byte{}
+	}
+	r := coeffs[0][0]
+	value := values[0]
+	result := make([]byte, len(value))
+	for i := 0; i < len(value); i++ {
+		v := value[i] / r
+		v = v % 257
+		if v < 0 {
+			v += 257
+		}
+		result[i] = uint8(v)
+	}
+	return result
+}
+
+// func extinction(matrix Matrix) Matrix {
+// 	if matrix.t == 1 {
+// 		return matrix
+// 	}
+
+// 	multiplication := 1
+
+// 	for i := 0; i < matrix.t; i++ {
+// 		multiplication *= matrix.matrix[i][matrix.t-1]
+// 	}
+
+// 	for i := 0; i < matrix.t; i++ {
+// 		tmp := multiplication / matrix.matrix[i][matrix.t-1]
+// 		for j := 0; j < matrix.t-1; j++ {
+// 			matrix.matrix[i][j] *= tmp
+// 		}
+// 		matrix.values[i] *= tmp
+// 	}
+
+// 	newMatrix := Matrix{
+// 		matrix: make([][]int, matrix.t-1),
+// 		values: make([]int, matrix.t-1),
+// 		t:      matrix.t - 1,
+// 	}
+
+// 	for i := 0; i < newMatrix.t; i++ {
+// 		newMatrix.values[i] = matrix.values[i+1] - matrix.values[0]
+// 		row := make([]int, newMatrix.t)
+// 		for j := 0; j < newMatrix.t; j++ {
+// 			row[j] = matrix.matrix[i+1][j] - matrix.matrix[0][j]
+// 		}
+// 		newMatrix.matrix[i] = row
+// 	}
+
+// 	return extinction(newMatrix)
+// }
